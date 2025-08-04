@@ -15,19 +15,19 @@ app = FastAPI()
 # === Config ===
 EMBED_MODEL = "all-MiniLM-L6-v2"
 MODEL_URL = "https://github.com/A-b-h-i-n-a-v-1-9/hackrx-insurance-rag/releases/download/v1.0/phi-2.Q4_K_M.gguf"
-GGUF_MODEL_PATH = "models/phi-2.Q4_K_M.gguf"
+GGUF_MODEL_PATH = "/data/phi-2.Q4_K_M.gguf"  # Use Hugging Face writable dir
 API_KEY = "cache-cache"
 
 # === Download GGUF model if not exists ===
-os.makedirs("models", exist_ok=True)
 if not os.path.exists(GGUF_MODEL_PATH):
-    print("Downloading GGUF model...")
+    print("Downloading GGUF model to /data...")
     with requests.get(MODEL_URL, stream=True) as r:
         r.raise_for_status()
         with open(GGUF_MODEL_PATH, "wb") as f:
             for chunk in r.iter_content(chunk_size=8192):
                 f.write(chunk)
     print("Model downloaded successfully.")
+
 
 # === Load models ===
 model = SentenceTransformer(EMBED_MODEL)
