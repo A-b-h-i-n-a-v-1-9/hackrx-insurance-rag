@@ -1,0 +1,10 @@
+sentence-transformers
+faiss-cpu
+PyMuPDF
+tqdm
+numpy
+fastapi 
+uvicorn 
+uvicorn
+requests
+llama-cpp-python==0.2.24  # Or version you're using
