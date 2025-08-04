@@ -13,24 +13,23 @@ from llama_cpp import Llama
 app = FastAPI()
 
 # === Config ===
-EMBED_MODEL = "all-MiniLM-L6-v2"
+EMBED_MODEL = "./all-MiniLM-L6-v2"
 MODEL_URL = "https://github.com/A-b-h-i-n-a-v-1-9/hackrx-insurance-rag/releases/download/v1.0/phi-2.Q4_K_M.gguf"
-GGUF_MODEL_PATH = "/data/phi-2.Q4_K_M.gguf"  # Use Hugging Face writable dir
+GGUF_MODEL_PATH = "/tmp/phi-2.Q4_K_M.gguf"  # HF writable directory
 API_KEY = "cache-cache"
 
-# === Download GGUF model if not exists ===
+# === Download GGUF Model if not present ===
 if not os.path.exists(GGUF_MODEL_PATH):
-    print("Downloading GGUF model to /data...")
+    print("🔽 Downloading GGUF model...")
     with requests.get(MODEL_URL, stream=True) as r:
         r.raise_for_status()
         with open(GGUF_MODEL_PATH, "wb") as f:
             for chunk in r.iter_content(chunk_size=8192):
                 f.write(chunk)
-    print("Model downloaded successfully.")
-
+    print("✅ Model downloaded to /tmp.")
 
 # === Load models ===
-model = SentenceTransformer(EMBED_MODEL)
+model = SentenceTransformer(EMBED_MODEL, cache_folder="/tmp")
 llm = Llama(
     model_path=GGUF_MODEL_PATH,
     n_ctx=1024,
@@ -51,7 +50,7 @@ def chunk_text(text, chunk_size=700, overlap=200):
         start = end - overlap
     return chunks or ["No meaningful content found."]
 
-# === Answering Logic ===
+# === Answer generation ===
 def generate_answer(context: str, question: str) -> str:
     try:
         prompt = f"""You are a helpful assistant. Answer the question using only the information below. Use exact values (₹, %, numbers, days) where possible.
@@ -66,7 +65,7 @@ A:"""
     except Exception as e:
         return f"Error generating answer: {str(e)}"
 
-# === Main Endpoint ===
+# === Main RAG Endpoint ===
 @app.post("/hackrx/run")
 async def run_rag(request: Request):
     try:
@@ -103,7 +102,7 @@ async def run_rag(request: Request):
         index = faiss.IndexFlatL2(dimension)
         index.add(embeddings)
 
-        # ❓ Process questions
+        # ❓ Answering questions
         answers = []
         for question in questions:
             try:
