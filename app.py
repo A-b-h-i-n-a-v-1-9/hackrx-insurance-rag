@@ -14,8 +14,20 @@ app = FastAPI()
 
 # === Config ===
 EMBED_MODEL = "all-MiniLM-L6-v2"
+MODEL_URL = "https://github.com/A-b-h-i-n-a-v-1-9/hackrx-insurance-rag/releases/download/v1.0/phi-2.Q4_K_M.gguf"
 GGUF_MODEL_PATH = "models/phi-2.Q4_K_M.gguf"
 API_KEY = "cache-cache"
+
+# === Download GGUF model if not exists ===
+os.makedirs("models", exist_ok=True)
+if not os.path.exists(GGUF_MODEL_PATH):
+    print("Downloading GGUF model...")
+    with requests.get(MODEL_URL, stream=True) as r:
+        r.raise_for_status()
+        with open(GGUF_MODEL_PATH, "wb") as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
+    print("Model downloaded successfully.")
 
 # === Load models ===
 model = SentenceTransformer(EMBED_MODEL)
@@ -27,7 +39,7 @@ llm = Llama(
     top_p=0.95
 )
 
-# === Text chunking ===
+# === Chunking ===
 def chunk_text(text, chunk_size=700, overlap=200):
     chunks = []
     start = 0
@@ -39,11 +51,10 @@ def chunk_text(text, chunk_size=700, overlap=200):
         start = end - overlap
     return chunks or ["No meaningful content found."]
 
-# === LLM-based answer generation ===
+# === Answering Logic ===
 def generate_answer(context: str, question: str) -> str:
     try:
-        prompt = f"""You are a helpful assistant. Answer the question below using only the information in the policy. 
-Respond in 1-2 clear, concise sentences. Avoid any unnecessary information.
+        prompt = f"""You are a helpful assistant. Answer the question using only the information below. Use exact values (₹, %, numbers, days) where possible.
 
 Policy Info:
 \"\"\"{context}\"\"\"
@@ -55,16 +66,16 @@ A:"""
     except Exception as e:
         return f"Error generating answer: {str(e)}"
 
-# === Main HackRx Endpoint ===
+# === Main Endpoint ===
 @app.post("/hackrx/run")
 async def run_rag(request: Request):
     try:
-        # 🔐 Authorization
+        # 🔐 Auth
         auth = request.headers.get("Authorization")
         if not auth or not auth.startswith("Bearer ") or auth.split()[1] != API_KEY:
             raise HTTPException(status_code=401, detail="Unauthorized")
 
-        # 📥 Parse payload
+        # 📥 Input
         payload = await request.json()
         pdf_url = payload.get("documents")
         questions = payload.get("questions", [])
@@ -77,22 +88,22 @@ async def run_rag(request: Request):
         if response.status_code != 200:
             raise HTTPException(status_code=400, detail="Failed to download PDF")
 
-        # ✂️ Extract text
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
             tmp.write(response.content)
             tmp_path = tmp.name
 
+        # 📃 Extract text
         doc = fitz.open(tmp_path)
         text = "\n".join(page.get_text().replace('\xa0', ' ') for page in doc)
         chunks = chunk_text(text)
 
-        # 🔎 FAISS Search
+        # 🔎 FAISS Index
         embeddings = model.encode(chunks).astype('float32')
         dimension = embeddings.shape[1]
         index = faiss.IndexFlatL2(dimension)
         index.add(embeddings)
 
-        # 🤖 Answer each question
+        # ❓ Process questions
         answers = []
         for question in questions:
             try:
